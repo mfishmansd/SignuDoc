@@ -1,0 +1,26 @@
+# Netlify build for SignuDoc, with Postgres and file storage in Supabase.
+# See docs/netlify-supabase.md for the one-time setup.
+
+[build]
+  # Migrations run before the build, as vercel.json does on Vercel. They use
+  # DATABASE_URL_UNPOOLED (a session connection) when it is set.
+  command = "node db/migrate.mjs --optional && next build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "24"
+  # Keeps tables in their own schema; see docs/netlify-supabase.md.
+  DATABASE_SCHEMA = "signudoc"
+
+# Deploy previews and branch deploys share the production database, so they
+# must not migrate it. Set MIGRATE_ON_PREVIEW=1 if they get their own.
+[context.deploy-preview]
+  command = "next build"
+
+[context.branch-deploy]
+  command = "next build"
+
+# Netlify's Next.js runtime is installed automatically for Next.js sites;
+# the scheduled functions in netlify/functions replace vercel.json's crons.
+[functions]
+  directory = "netlify/functions"

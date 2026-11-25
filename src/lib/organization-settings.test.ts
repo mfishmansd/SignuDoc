@@ -55,7 +55,7 @@ function fakeDatabase(row = storedRow) {
   const saved: { values: unknown[] | null } = { values: null };
   const database = {
     query: (text: string, values: unknown[] = []) => {
-      if (text.includes("insert into public.app_settings")) {
+      if (text.includes("insert into app_settings")) {
         saved.values = values;
 
         return Promise.resolve({ rowCount: 0, rows: [] });

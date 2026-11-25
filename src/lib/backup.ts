@@ -192,7 +192,7 @@ export async function listTablesInRestoreOrder(
     `
       SELECT table_name AS name
       FROM information_schema.tables
-      WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+      WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
       ORDER BY table_name
     `,
   );
@@ -203,7 +203,7 @@ export async function listTablesInRestoreOrder(
       JOIN pg_class child ON child.oid = c.conrelid
       JOIN pg_class parent ON parent.oid = c.confrelid
       JOIN pg_namespace n ON n.oid = child.relnamespace
-      WHERE c.contype = 'f' AND n.nspname = 'public'
+      WHERE c.contype = 'f' AND n.nspname = current_schema()
         AND child.relname <> parent.relname
     `,
   );

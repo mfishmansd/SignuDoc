@@ -499,7 +499,7 @@ export async function saveBrandLogo(
   // it was without one: open.
   await database.query(
     `
-      insert into public.app_settings (
+      insert into app_settings (
         id,
         signup_mode,
         logo_content_type,
@@ -530,7 +530,7 @@ export async function removeBrandLogo(
 ): Promise<void> {
   await database.query(
     `
-      update public.app_settings
+      update app_settings
       set
         logo_content_type = null,
         logo_data = null,
@@ -555,7 +555,7 @@ export async function readBrandLogo(
       database,
       `
         select logo_content_type, logo_data, logo_hash
-        from public.app_settings
+        from app_settings
         where id
       `,
     );

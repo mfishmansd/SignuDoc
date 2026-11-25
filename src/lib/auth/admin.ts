@@ -16,7 +16,7 @@ export async function isAdminUser(
   try {
     const row = await queryOne<{ role: string }>(
       database,
-      `select role from public."user" where id = $1`,
+      `select role from "user" where id = $1`,
       [userId],
     );
 

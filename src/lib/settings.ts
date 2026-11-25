@@ -285,7 +285,7 @@ export async function readStoredSettings(
     try {
       const row = await queryOne<StoredSettingsRow>(
         database,
-        `select ${settingsColumnsAfter(laterMigrations)} from public.app_settings where id`,
+        `select ${settingsColumnsAfter(laterMigrations)} from app_settings where id`,
       );
 
       return row ? mapSettingsRow(row) : null;
@@ -416,7 +416,7 @@ async function saveSettingsLocked(
   const row = await queryOne<AppSettingsRow>(
     database,
     `
-      insert into public.app_settings (
+      insert into app_settings (
         id,
         allowed_email_domains,
         email_ready_at,
@@ -512,7 +512,7 @@ export async function markEmailReady(
 
   await database.query(
     `
-      update public.app_settings
+      update app_settings
       set email_ready_at = $1, updated_at = $2
       where id
         and (email_ready_at is null) = $3
@@ -547,7 +547,7 @@ export async function closeSignupUntilSetupFinishes(
 
   await database.query(
     `
-      insert into public.app_settings (id, signup_mode, created_at, updated_at)
+      insert into app_settings (id, signup_mode, created_at, updated_at)
       values (true, 'closed', $1, $1)
       on conflict (id) do nothing
     `,
@@ -572,9 +572,9 @@ export async function readSetupState(
       database,
       `
         select
-          exists (select 1 from public."user" where role = 'admin') as has_admin,
-          exists (select 1 from public."user") as has_users,
-          (select setup_completed_at from public.app_settings where id)
+          exists (select 1 from "user" where role = 'admin') as has_admin,
+          exists (select 1 from "user") as has_users,
+          (select setup_completed_at from app_settings where id)
             as setup_completed_at
       `,
     );

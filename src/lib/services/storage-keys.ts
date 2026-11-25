@@ -9,7 +9,7 @@ const RECIPIENT_CERTIFICATE_FILE_NAME = "recipient.pdf";
 const LEGACY_INTERNAL_EVIDENCE_FILE_NAME = "internal.json";
 const LEGACY_RECIPIENT_EVIDENCE_FILE_NAME = "recipient.json";
 
-const PENDING_UPLOAD_ROOT_SEGMENT = "uploads";
+export const PENDING_UPLOAD_ROOT_SEGMENT = "uploads";
 const PENDING_UPLOAD_NAME_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.pdf$/;
 

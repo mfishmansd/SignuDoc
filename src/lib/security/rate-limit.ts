@@ -132,7 +132,7 @@ export async function deleteExpiredRateLimits(
   now: number = Date.now(),
 ): Promise<number> {
   const result = await database.query(
-    "delete from public.rate_limits where expires_at <= $1",
+    "delete from rate_limits where expires_at <= $1",
     [now],
   );
 
@@ -160,7 +160,7 @@ export async function consumeRateLimit(
       expires_at: number;
     }>(
       `
-        insert into public.rate_limits as current (key, count, expires_at)
+        insert into rate_limits as current (key, count, expires_at)
         values ($1, 1, $2::bigint + $3::bigint)
         on conflict (key) do update set
           count = case
@@ -215,7 +215,7 @@ export async function peekRateLimit(
       count: number;
       expires_at: number;
     }>(
-      "select count, expires_at from public.rate_limits where key = $1 and expires_at > $2",
+      "select count, expires_at from rate_limits where key = $1 and expires_at > $2",
       [hashKey(input.key), now],
     );
     const row = result.rows[0];
@@ -278,7 +278,7 @@ export async function refundRateLimit(
   // while is safer than one that forgets.
   try {
     await (database ?? getDb()).query(
-      "update public.rate_limits set count = greatest(count - 1, 0) where key = $1 and expires_at > $2",
+      "update rate_limits set count = greatest(count - 1, 0) where key = $1 and expires_at > $2",
       [hashKey(key), now],
     );
   } catch (error) {
@@ -295,7 +295,7 @@ export async function clearRateLimit(
 
   try {
     await (database ?? getDb()).query(
-      "delete from public.rate_limits where key = $1",
+      "delete from rate_limits where key = $1",
       [hashKey(key)],
     );
   } catch (error) {

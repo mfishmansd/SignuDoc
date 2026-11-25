@@ -10,6 +10,8 @@ import {
   buildPendingUploadPrefix,
   isPendingUploadKey,
 } from "../services/storage-keys.ts";
+import { resolveStorageDriver } from "../services/storage/driver.ts";
+import { createSupabaseSignedUpload } from "../services/storage/supabase.ts";
 import { MAX_UPLOAD_SIZE_BYTES } from "../types/domain.ts";
 
 // Large PDFs for the API. A request to a Vercel Function is capped at
@@ -64,6 +66,19 @@ export async function issueApiUpload(
 
   if (!pathname) {
     throw new Error("Could not build an upload path for this account.");
+  }
+
+  if (resolveStorageDriver() === "supabase") {
+    const upload = await createSupabaseSignedUpload(pathname, { now });
+
+    return {
+      expiresAt: upload.expiresAt,
+      headers: upload.headers,
+      maxBytes: MAX_UPLOAD_SIZE_BYTES,
+      method: "PUT",
+      uploadId,
+      url: upload.url,
+    };
   }
 
   const validUntil = now + UPLOAD_URL_LIFETIME_MS;

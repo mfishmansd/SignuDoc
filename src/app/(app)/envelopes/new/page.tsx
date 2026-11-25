@@ -1,6 +1,9 @@
 import { UploadShell } from "@/components/envelopes/upload-shell";
 import { getAuthSession } from "@/lib/auth/server";
-import { supportsDirectUploads } from "@/lib/services/storage";
+import {
+  resolveStorageDriver,
+  supportsDirectUploads,
+} from "@/lib/services/storage";
 import { buildPendingUploadPrefix } from "@/lib/services/storage-keys";
 
 export default async function NewEnvelopePage() {
@@ -12,6 +15,9 @@ export default async function NewEnvelopePage() {
     <UploadShell
       directUploadPrefix={
         session ? buildPendingUploadPrefix(session.user.id) : null
+      }
+      directUploadTarget={
+        resolveStorageDriver() === "supabase" ? "supabase" : "blob"
       }
     />
   );

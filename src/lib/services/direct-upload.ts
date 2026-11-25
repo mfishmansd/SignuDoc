@@ -3,6 +3,7 @@ import { handleUploadPresigned } from "@vercel/blob/client";
 
 import { MAX_UPLOAD_SIZE_BYTES } from "../types/domain.ts";
 import { isPendingUploadKey } from "./storage-keys.ts";
+import { createSupabaseSignedUpload } from "./storage/supabase.ts";
 
 // Direct uploads: the browser sends a PDF straight to Vercel Blob instead of
 // through the app, because a request to a Vercel Function is capped at
@@ -136,4 +137,28 @@ export async function authorizeDirectUpload({
     webhookPublicKey:
       process.env.BLOB_WEBHOOK_PUBLIC_KEY?.trim() || "no-callbacks-used",
   });
+}
+
+/**
+ * The Supabase Storage form of the above: the upload page asks for a signed
+ * URL for one pathname in the user's pending folder and PUTs the PDF to it.
+ * The bucket's own limits (PDFs only, up to the upload limit) apply.
+ */
+export async function authorizeSupabaseDirectUpload({
+  body,
+  userId,
+}: {
+  body: unknown;
+  userId: string;
+}) {
+  const pathname =
+    typeof body === "object" && body !== null
+      ? (body as { pathname?: unknown }).pathname
+      : undefined;
+
+  if (typeof pathname !== "string" || !isPendingUploadKey(pathname, userId)) {
+    throw new DirectUploadRequestError("Invalid upload destination.");
+  }
+
+  return createSupabaseSignedUpload(pathname);
 }

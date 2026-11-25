@@ -5,6 +5,13 @@
 //   node db/migrate.mjs             apply pending migrations (fails without a database URL)
 //   node db/migrate.mjs --optional  same, but exits cleanly when no database URL is set
 //
+// DATABASE_SCHEMA puts every table in a schema of its own instead of public,
+// for sharing a database with another app (such as a Supabase project whose
+// public schema is exposed through its API). The migration files are left
+// as they are, so they still merge cleanly from upstream: their "public."
+// is rewritten to the schema as each one is applied. The app finds the
+// tables through the database role's search_path (see docs/netlify-supabase.md).
+//
 // On Vercel this runs inside the build (see vercel.json). It only touches the
 // database for production builds unless MIGRATE_ON_PREVIEW=1 is set, because
 // preview deployments share the production database unless each preview has
@@ -38,10 +45,33 @@ export async function listMigrationFiles(
   return entries.filter((entry) => entry.endsWith(".sql")).sort();
 }
 
+const SCHEMA_NAME_PATTERN = /^[a-z_][a-z0-9_]{0,62}$/;
+
+/** The schema migrations go into: DATABASE_SCHEMA, or public. */
+export function resolveMigrationSchema(env = process.env) {
+  const schema = env.DATABASE_SCHEMA?.trim() || "public";
+
+  if (!SCHEMA_NAME_PATTERN.test(schema)) {
+    throw new Error(
+      `DATABASE_SCHEMA "${schema}" is not a plain lowercase schema name.`,
+    );
+  }
+
+  return schema;
+}
+
+/** Points a migration written for public at another schema. */
+export function retargetMigrationSql(sql, schema) {
+  return schema === "public"
+    ? sql
+    : sql.replace(/\bpublic\.(?=["a-zA-Z_])/g, `${schema}.`);
+}
+
 export async function runMigrations({
   connectionString,
   log = console.log,
   migrationsDir = DEFAULT_MIGRATIONS_DIR,
+  schema = "public",
 }) {
   const client = new pg.Client({
     application_name: "signudoc-migrate",
@@ -53,15 +83,22 @@ export async function runMigrations({
 
   try {
     await client.query("select pg_advisory_lock($1)", [ADVISORY_LOCK_ID]);
+
+    if (schema !== "public") {
+      await client.query(`create schema if not exists ${schema}`);
+    }
+
+    // Anything a migration creates without naming a schema lands here too.
+    await client.query(`set search_path = ${schema}`);
     await client.query(`
-      create table if not exists public.signudoc_migrations (
+      create table if not exists ${schema}.signudoc_migrations (
         version text primary key,
         applied_at timestamptz not null default now()
       )
     `);
 
     const appliedResult = await client.query(
-      "select version from public.signudoc_migrations",
+      `select version from ${schema}.signudoc_migrations`,
     );
     const appliedVersions = new Set(
       appliedResult.rows.map((row) => row.version),
@@ -76,14 +113,17 @@ export async function runMigrations({
         continue;
       }
 
-      const sql = await readFile(path.join(migrationsDir, file), "utf8");
+      const sql = retargetMigrationSql(
+        await readFile(path.join(migrationsDir, file), "utf8"),
+        schema,
+      );
 
       await client.query("begin");
 
       try {
         await client.query(sql);
         await client.query(
-          "insert into public.signudoc_migrations (version) values ($1)",
+          `insert into ${schema}.signudoc_migrations (version) values ($1)`,
           [version],
         );
         await client.query("commit");
@@ -153,11 +193,15 @@ async function main() {
     return;
   }
 
-  const result = await runMigrations({ connectionString: target.value });
+  const schema = resolveMigrationSchema();
+  const result = await runMigrations({
+    connectionString: target.value,
+    schema,
+  });
 
   console.log(
     result.applied.length > 0
-      ? `[migrate] done: applied ${String(result.applied.length)} of ${String(result.total)} migration(s) using ${target.name}.`
+      ? `[migrate] done: applied ${String(result.applied.length)} of ${String(result.total)} migration(s) into schema ${schema} using ${target.name}.`
       : `[migrate] done: database is up to date (${String(result.total)} migration(s), ${target.name}).`,
   );
 }

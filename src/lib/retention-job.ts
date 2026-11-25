@@ -21,6 +21,9 @@ import type { EmailService } from "./services/email.ts";
 import type { StorageService } from "./services/storage.ts";
 import { isMissingSchemaError } from "./settings.ts";
 import { getEnv, type EnvSource } from "./utils/env.ts";
+import { PENDING_UPLOAD_ROOT_SEGMENT } from "./services/storage-keys.ts";
+import { resolveStorageDriver } from "./services/storage/driver.ts";
+import { sweepAbandonedSupabaseUploads } from "./services/storage/supabase.ts";
 
 // The daily job. First the cleanup: stale drafts, queued account deletions,
 // expired download links and finished rate limit windows. Then the
@@ -192,6 +195,16 @@ export async function runRetentionJob({
         console.error("Clearing old webhook deliveries failed:", error);
       }
     });
+
+    // Vercel Blob deletes abandoned uploads by itself after a day; Supabase
+    // Storage has to be asked.
+    if (resolveStorageDriver() === "supabase") {
+      await sweepAbandonedSupabaseUploads({
+        prefix: PENDING_UPLOAD_ROOT_SEGMENT,
+      }).catch((error: unknown) => {
+        console.error("Clearing abandoned uploads failed:", error);
+      });
+    }
 
     const deletions = await runScheduledEnvelopeDeletions({
       database,

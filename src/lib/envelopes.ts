@@ -2085,7 +2085,7 @@ async function listEnvelopes(
             ? `
         OR EXISTS (
           SELECT 1
-          FROM public."user" sender
+          FROM "user" sender
           WHERE sender.id = envelopes.user_id
             AND (
               lower(sender.email) LIKE ${searchPlaceholder} ESCAPE '\\'
@@ -2207,7 +2207,7 @@ async function listSendersById(
 
   const rows = await queryMany<SenderRow>(
     database,
-    `SELECT id, name, email FROM public."user" WHERE id = ANY($1::text[])`,
+    `SELECT id, name, email FROM "user" WHERE id = ANY($1::text[])`,
     [uniqueIds],
   );
 

@@ -68,10 +68,10 @@ export async function resolveEnvelopeViewerAccess(
         owner.email AS "ownerEmail",
         owner.name AS "ownerName",
         e.status,
-        (SELECT role FROM public."user" WHERE id = $2) AS "viewerRole",
+        (SELECT role FROM "user" WHERE id = $2) AS "viewerRole",
         ${sharesTeamCondition("$2", "e")} AS "sharesTeam"
       FROM envelopes e
-      JOIN public."user" owner ON owner.id = e.user_id
+      JOIN "user" owner ON owner.id = e.user_id
       WHERE e.id = $1
     `,
     [envelopeId, viewerUserId],

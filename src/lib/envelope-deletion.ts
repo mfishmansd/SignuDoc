@@ -146,7 +146,7 @@ async function lockFinishedEnvelope(
 
   const owner = await queryOne<OwnerRow>(
     tx,
-    `SELECT email, name, role FROM public."user" WHERE id = $1 FOR SHARE`,
+    `SELECT email, name, role FROM "user" WHERE id = $1 FOR SHARE`,
     [located.ownerUserId],
   );
   let actorIsAdmin = true;
@@ -157,7 +157,7 @@ async function lockFinishedEnvelope(
       ? owner
       : await queryOne<{ role: string }>(
           tx,
-          `SELECT role FROM public."user" WHERE id = $1 FOR SHARE`,
+          `SELECT role FROM "user" WHERE id = $1 FOR SHARE`,
           [actorUserId],
         );
 
@@ -805,7 +805,7 @@ export async function runScheduledEnvelopeDeletions({
         u.name AS "ownerName"
       FROM scheduled_envelope_deletions s
       JOIN envelopes e ON e.id = s.envelope_id
-      JOIN public."user" u ON u.id = e.user_id
+      JOIN "user" u ON u.id = e.user_id
       WHERE (s.cancelled_at IS NULL AND s.sender_notified_at IS NULL)
         OR (
           s.cancelled_at IS NOT NULL

@@ -285,17 +285,23 @@ function UploadShellLayout({
 // then tells the app where it is. The Blob SDK is loaded only when used.
 async function createDraftFromDirectUpload(input: {
   file: File;
+  target: DirectUploadTarget;
   title: string;
   uploadPrefix: string;
 }) {
-  const { uploadPresigned } = await import("@vercel/blob/client");
   const uploadKey = `${input.uploadPrefix}${crypto.randomUUID()}.pdf`;
 
-  await uploadPresigned(uploadKey, input.file, {
-    access: "private",
-    contentType: "application/pdf",
-    handleUploadUrl: "/api/uploads",
-  });
+  if (input.target === "supabase") {
+    await uploadToSupabase(uploadKey, input.file);
+  } else {
+    const { uploadPresigned } = await import("@vercel/blob/client");
+
+    await uploadPresigned(uploadKey, input.file, {
+      access: "private",
+      contentType: "application/pdf",
+      handleUploadUrl: "/api/uploads",
+    });
+  }
 
   return fetch("/api/envelopes", {
     body: JSON.stringify({
@@ -306,6 +312,35 @@ async function createDraftFromDirectUpload(input: {
     headers: { "content-type": "application/json" },
     method: "POST",
   });
+}
+
+// Supabase Storage: ask /api/uploads for a signed URL for this key, then
+// PUT the file to it.
+async function uploadToSupabase(uploadKey: string, file: File) {
+  const authorization = await fetch("/api/uploads", {
+    body: JSON.stringify({ pathname: uploadKey }),
+    headers: { "content-type": "application/json" },
+    method: "POST",
+  });
+
+  if (!authorization.ok) {
+    throw new Error("Unable to start the upload.");
+  }
+
+  const upload = (await authorization.json()) as {
+    headers: Record<string, string>;
+    method: "PUT";
+    url: string;
+  };
+  const response = await fetch(upload.url, {
+    body: file,
+    headers: upload.headers,
+    method: upload.method,
+  });
+
+  if (!response.ok) {
+    throw new Error("The upload did not finish. Please try again.");
+  }
 }
 
 async function createDraftFromForm(input: { file: File; title: string }) {
@@ -326,9 +361,16 @@ type UploadShellProps = {
    * null when uploads go through the app.
    */
   directUploadPrefix?: string | null;
+  /** Which store the browser uploads to directly. */
+  directUploadTarget?: DirectUploadTarget;
 };
 
-export function UploadShell({ directUploadPrefix = null }: UploadShellProps) {
+type DirectUploadTarget = "blob" | "supabase";
+
+export function UploadShell({
+  directUploadPrefix = null,
+  directUploadTarget = "blob",
+}: UploadShellProps) {
   const router = useRouter();
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState<UploadSummary | null>(null);
@@ -515,6 +557,7 @@ export function UploadShell({ directUploadPrefix = null }: UploadShellProps) {
       const response = directUploadPrefix
         ? await createDraftFromDirectUpload({
             ...draftInput,
+            target: directUploadTarget,
             uploadPrefix: directUploadPrefix,
           })
         : await createDraftFromForm(draftInput);

@@ -9,9 +9,13 @@ import {
 import { getClientIpAddress, getRequestPathname } from "@/lib/security/request";
 import {
   authorizeDirectUpload,
+  authorizeSupabaseDirectUpload,
   DirectUploadRequestError,
 } from "@/lib/services/direct-upload";
-import { supportsDirectUploads } from "@/lib/services/storage";
+import {
+  resolveStorageDriver,
+  supportsDirectUploads,
+} from "@/lib/services/storage";
 
 // Hands the browser a short-lived signed URL for sending one PDF straight to
 // Vercel Blob. Called by the Blob SDK from the upload page, never by hand.
@@ -44,6 +48,15 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (resolveStorageDriver() === "supabase") {
+      return NextResponse.json(
+        await authorizeSupabaseDirectUpload({
+          body: await request.json().catch(() => null),
+          userId: session.user.id,
+        }),
+      );
+    }
+
     return NextResponse.json(
       await authorizeDirectUpload({
         body: await request.json().catch(() => null),

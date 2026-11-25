@@ -95,7 +95,7 @@ function isUniqueViolation(error: unknown): boolean {
 async function assertAdministrator(actor: TeamActor, tx: DbExecutor) {
   const account = await queryOne<{ role: string }>(
     tx,
-    `SELECT role FROM public."user" WHERE id = $1 FOR SHARE`,
+    `SELECT role FROM "user" WHERE id = $1 FOR SHARE`,
     [actor.userId],
   );
 
@@ -141,7 +141,7 @@ export async function listTeams(
     `
       SELECT m.team_id AS "teamId", u.id, u.name, u.email
       FROM team_members m
-      JOIN public."user" u ON u.id = m.user_id
+      JOIN "user" u ON u.id = m.user_id
       ORDER BY lower(u.name), lower(u.email), u.id
     `,
   );
@@ -313,7 +313,7 @@ export async function addTeamMember(
       tx,
       `
         SELECT id, name, email
-        FROM public."user"
+        FROM "user"
         WHERE lower(email) = lower($1)
       `,
       [parsed.email],
@@ -377,7 +377,7 @@ export async function removeTeamMember(
         )
         SELECT u.name, u.email
         FROM removed
-        JOIN public."user" u ON u.id = removed.user_id
+        JOIN "user" u ON u.id = removed.user_id
       `,
       [teamId, userId],
     );

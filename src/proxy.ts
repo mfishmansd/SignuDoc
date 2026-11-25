@@ -2,7 +2,10 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { frameAncestorsFor } from "@/lib/embed-origin";
-import { supportsDirectUploads } from "@/lib/services/storage/driver";
+import {
+  resolveStorageDriver,
+  supportsDirectUploads,
+} from "@/lib/services/storage/driver";
 
 const DEFAULT_PERMISSIONS_POLICY = [
   "accelerometer=()",
@@ -40,6 +43,13 @@ function resolveBlobUploadSource() {
     }
   } catch {
     return false;
+  }
+
+  // Supabase Storage: the upload page PUTs to a signed URL on the project.
+  if (resolveStorageDriver() === "supabase") {
+    const projectUrl = process.env.SUPABASE_URL?.trim().replace(/\/+$/, "");
+
+    return projectUrl ? `${projectUrl}/storage/v1/object/upload/sign/` : false;
   }
 
   const apiUrl =

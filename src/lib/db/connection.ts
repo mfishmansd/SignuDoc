@@ -33,6 +33,18 @@ export function getDb(): Pool {
   }
 
   const isOnVercel = process.env.VERCEL === "1";
+  // Netlify functions are suspended between requests too. Supabase's pooler
+  // shares a small number of connections across every function instance,
+  // so each instance keeps few and lets them go quickly.
+  // DATABASE_POOL_MAX sets how many; setting it also marks the install as
+  // serverless, since that is what it is for.
+  const configuredMax = Number.parseInt(
+    process.env.DATABASE_POOL_MAX ?? "",
+    10,
+  );
+  const hasConfiguredMax = Number.isInteger(configuredMax) && configuredMax > 0;
+  const isServerless =
+    isOnVercel || process.env.NETLIFY === "true" || hasConfiguredMax;
   const pool = new Pool({
     application_name: "signudoc",
     connectionString: requireConfigValue(
@@ -43,8 +55,12 @@ export function getDb(): Pool {
     connectionTimeoutMillis: 10_000,
     // A Vercel function instance is suspended between requests, so idle
     // connections are released quickly there instead of being left to die.
-    idleTimeoutMillis: isOnVercel ? 5_000 : 30_000,
-    max: process.env.NODE_ENV === "production" ? 10 : 5,
+    idleTimeoutMillis: isServerless ? 5_000 : 30_000,
+    max: hasConfiguredMax
+      ? configuredMax
+      : process.env.NODE_ENV === "production"
+        ? 10
+        : 5,
   });
 
   pool.on("error", (error) => {

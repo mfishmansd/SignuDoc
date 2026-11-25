@@ -400,7 +400,7 @@ export async function completeSetup(
         // setup has finished, and there is nobody else to vouch for it.
         const promoted = await tx.query(
           `
-            update public."user"
+            update "user"
             set role = 'admin', "emailVerified" = true, "updatedAt" = now()
             where id = $1
           `,
@@ -457,7 +457,7 @@ export async function completeSetup(
       }
 
       const promoted = await tx.query(
-        `update public."user" set role = 'admin', "updatedAt" = now() where id = $1`,
+        `update "user" set role = 'admin', "updatedAt" = now() where id = $1`,
         [sessionUser.id],
       );
 
@@ -494,7 +494,7 @@ export async function completeSetup(
     // rollback here. Left behind, it would make the install look claimed.
     if (created.userId) {
       await database
-        .query(`delete from public."user" where id = $1 and role <> 'admin'`, [
+        .query(`delete from "user" where id = $1 and role <> 'admin'`, [
           created.userId,
         ])
         .catch(() => undefined);
