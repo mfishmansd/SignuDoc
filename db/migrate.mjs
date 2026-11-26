@@ -85,7 +85,16 @@ export async function runMigrations({
     await client.query("select pg_advisory_lock($1)", [ADVISORY_LOCK_ID]);
 
     if (schema !== "public") {
-      await client.query(`create schema if not exists ${schema}`);
+      // "create schema if not exists" still needs CREATE on the database,
+      // which a role limited to its own pre-made schema (see
+      // db/supabase-setup.sql) does not have, so only create when missing.
+      const existing = await client.query(
+        "select 1 from pg_namespace where nspname = $1",
+        [schema],
+      );
+      if (existing.rowCount === 0) {
+        await client.query(`create schema ${schema}`);
+      }
     }
 
     // Anything a migration creates without naming a schema lands here too.
