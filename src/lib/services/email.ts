@@ -13,16 +13,21 @@ import {
   assertServiceConfig,
   ServiceConfigurationError,
 } from "./service-config.ts";
+import {
+  createSendGridEmailService,
+  readSendGridApiKey,
+} from "./email-sendgrid.ts";
 
 // The addresses mail is sent from and replied to are not needed here: they
 // come from RESEND_FROM_EMAIL and SUPPORT_EMAIL when those are set, and from
 // the install's settings otherwise, and are looked up when a message is sent.
 const EMAIL_ENV_KEYS = ["RESEND_API_KEY"] as const;
+const SENDGRID_ENV_KEYS = ["SENDGRID_API_KEY"] as const;
 
 const DEFAULT_CAPTURE_DIR = ".data/outbox";
 const DEFAULT_CAPTURE_SENDER_ADDRESS = "dev@signudoc.localhost";
 
-export type EmailDriver = "capture" | "resend";
+export type EmailDriver = "capture" | "resend" | "sendgrid";
 
 export type EmailAttachment = {
   content: Uint8Array;
@@ -190,15 +195,22 @@ export function resolveEmailDriver(env: EnvSource = process.env): EmailDriver {
   const configuredDriver = env.EMAIL_DRIVER?.trim().toLowerCase();
 
   if (!configuredDriver) {
-    return "resend";
+    // SendGrid when it is the only provider with a key; Resend otherwise.
+    return env.SENDGRID_API_KEY?.trim() && !env.RESEND_API_KEY?.trim()
+      ? "sendgrid"
+      : "resend";
   }
 
-  if (configuredDriver === "capture" || configuredDriver === "resend") {
+  if (
+    configuredDriver === "capture" ||
+    configuredDriver === "resend" ||
+    configuredDriver === "sendgrid"
+  ) {
     return configuredDriver;
   }
 
   throw new Error(
-    `Unknown EMAIL_DRIVER "${configuredDriver}". Use "resend" or "capture".`,
+    `Unknown EMAIL_DRIVER "${configuredDriver}". Use "resend", "sendgrid" or "capture".`,
   );
 }
 
@@ -359,6 +371,16 @@ export function createEmailService({
 }: CreateEmailServiceOptions = {}): EmailService {
   if (!resendClient && resolveEmailDriver(env) === "capture") {
     return createCaptureEmailService(env, resolveAddresses);
+  }
+
+  if (!resendClient && resolveEmailDriver(env) === "sendgrid") {
+    assertServiceConfig("email", SENDGRID_ENV_KEYS, env);
+
+    return createSendGridEmailService({
+      apiKey: readSendGridApiKey(env)!,
+      resolveAddresses,
+      wait,
+    });
   }
 
   if (!resendClient) {

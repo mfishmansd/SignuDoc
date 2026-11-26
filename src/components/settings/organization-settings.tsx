@@ -46,6 +46,8 @@ import type { SignupMode } from "@/lib/signup-policy";
 const GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again.";
 const RESEND_DOMAINS_URL = "https://resend.com/domains";
 const RESEND_MARKETPLACE_URL = "https://vercel.com/marketplace/resend";
+const SENDGRID_SENDER_AUTH_URL =
+  "https://app.sendgrid.com/settings/sender_auth";
 
 type OrganizationSettingsProps = {
   initialSettings: OrganizationSettingsView;
@@ -349,7 +351,7 @@ export function OrganizationSettings({
                 error={errors.senderAddress}
                 helper={
                   values.senderAddressFromEnv
-                    ? "Set by the RESEND_FROM_EMAIL environment variable."
+                    ? "Set by the RESEND_FROM_EMAIL or EMAIL_FROM environment variable."
                     : "The address emails come from, at a domain you own. A subdomain such as notifications@sign.yourcompany.com keeps this site's mail apart from your everyday email."
                 }
                 label="Send email from"
@@ -709,7 +711,8 @@ function EmailSetupPanel() {
   const canSendTest =
     status !== null &&
     status.state !== "missing_key" &&
-    status.state !== "capture";
+    status.state !== "capture" &&
+    !(status.state === "sendgrid" && status.check === "missing_key");
 
   return (
     <div className="space-y-5 border-t border-(--border) pt-8" id="email-setup">
@@ -807,6 +810,11 @@ function EmailSetupPanel() {
         status?.state === "test_sender" ? (
           <ShellButton href={RESEND_DOMAINS_URL} variant="ghost">
             Open Resend
+          </ShellButton>
+        ) : null}
+        {status?.state === "sendgrid" ? (
+          <ShellButton href={SENDGRID_SENDER_AUTH_URL} variant="ghost">
+            Open SendGrid
           </ShellButton>
         ) : null}
       </div>
@@ -943,6 +951,74 @@ function describeEmailStatus(status: EmailStatus): {
       return {
         lines: [
           `Resend could not be asked about this site's email: ${status.message}`,
+        ],
+        ready: false,
+        title: "Email could not be checked",
+      };
+    case "sendgrid":
+      return describeSendGridStatus(status);
+  }
+}
+
+function describeSendGridStatus(
+  status: Extract<EmailStatus, { state: "sendgrid" }>,
+): ReturnType<typeof describeEmailStatus> {
+  const domain = status.domain ?? "this domain";
+
+  switch (status.check) {
+    case "missing_key":
+      return {
+        lines: [
+          "This site is set to send with SendGrid but has no SendGrid API key, so it cannot send anything.",
+        ],
+        ready: false,
+        steps: [
+          {
+            text: "Create an API key in SendGrid (Mail Send access is enough; Full Access also lets this page check your domain).",
+          },
+          {
+            text: "Set it as the SENDGRID_API_KEY environment variable where this site runs, then redeploy.",
+          },
+        ],
+        title: "Email is not connected",
+      };
+    case "no_sender":
+      return {
+        lines: [
+          'Enter an address at a domain you have authenticated in SendGrid in "Send email from" above and save, or set EMAIL_FROM.',
+        ],
+        ready: false,
+        title: "Choose who email comes from",
+      };
+    case "domain_missing":
+      return {
+        lines: [
+          `${domain} is not authenticated in your SendGrid account. Add it under Settings, Sender Authentication in SendGrid, then reload this page.`,
+        ],
+        ready: false,
+        title: `${domain} needs to be authenticated in SendGrid`,
+      };
+    case "domain_unverified":
+      return {
+        lines: [
+          `${domain} is in SendGrid, but its DNS records are not verified yet. Verify them under Settings, Sender Authentication in SendGrid.`,
+        ],
+        ready: false,
+        title: `Waiting for ${domain}'s DNS records`,
+      };
+    case "restricted_key":
+      return {
+        lines: [
+          `This site's SendGrid key may only send mail, so it cannot check ${domain} from here.`,
+          "Send yourself a test email. If it arrives, email is working.",
+        ],
+        ready: false,
+        title: "Send a test email to finish",
+      };
+    case "error":
+      return {
+        lines: [
+          `SendGrid could not be asked about this site's email: ${status.message ?? "unknown error"}`,
         ],
         ready: false,
         title: "Email could not be checked",

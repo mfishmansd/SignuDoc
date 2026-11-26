@@ -272,7 +272,9 @@ export function getEnv(env: EnvSource = process.env) {
     },
     email: {
       apiKey: readEnv(env, "RESEND_API_KEY"),
-      senderAddress: readEnv(env, "RESEND_FROM_EMAIL"),
+      // EMAIL_FROM is the provider-neutral name, for SendGrid installs.
+      senderAddress:
+        readEnv(env, "RESEND_FROM_EMAIL") ?? readEnv(env, "EMAIL_FROM"),
       supportAddress: readEnv(env, "SUPPORT_EMAIL"),
     },
     internal: {

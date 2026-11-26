@@ -8,6 +8,10 @@ import {
 } from "./services/email-addresses.ts";
 import { resolveEmailDriver } from "./services/email.ts";
 import {
+  checkSendGridDomain,
+  readSendGridApiKey,
+} from "./services/email-sendgrid.ts";
+import {
   getSettings,
   markEmailReady,
   type ResolvedSettings,
@@ -63,6 +67,23 @@ export type EmailStatus =
       senderAddress: string;
     }
   | { state: "ready"; domain: string; senderAddress: string }
+  /**
+   * Sending through SendGrid. Its domain authentication is done in
+   * SendGrid itself; this only reports what SendGrid says about it.
+   */
+  | {
+      state: "sendgrid";
+      check:
+        | "missing_key"
+        | "no_sender"
+        | "domain_missing"
+        | "domain_unverified"
+        | "restricted_key"
+        | "error";
+      domain?: string;
+      message?: string;
+      senderAddress?: string;
+    }
   | { state: "error"; message: string; senderAddress: string };
 
 /** The parts of the Resend SDK used here. Replaced by a fake in tests. */
@@ -370,6 +391,83 @@ async function findDomain(
   };
 }
 
+async function inspectSendGrid(
+  env: EnvSource,
+  settings: ResolvedSettings | undefined,
+  recordReady: ((ready: boolean) => Promise<void>) | undefined,
+): Promise<EmailStatus> {
+  const apiKey = readSendGridApiKey(env);
+
+  if (!apiKey) {
+    return { check: "missing_key", state: "sendgrid" };
+  }
+
+  const resolvedSettings = settings ?? (await getSettings(env));
+  const markReady =
+    recordReady ??
+    ((ready: boolean) => defaultRecordReady(ready, resolvedSettings));
+
+  if (!resolvedSettings.senderAddress?.trim()) {
+    await markReady(false);
+
+    return { check: "no_sender", state: "sendgrid" };
+  }
+
+  const senderAddress = extractEmailAddress(
+    buildEmailAddresses(resolvedSettings).senderAddress,
+  );
+  const domain = getAddressDomain(senderAddress);
+
+  if (!domain) {
+    await markReady(false);
+
+    return { check: "no_sender", senderAddress, state: "sendgrid" };
+  }
+
+  const found = await checkSendGridDomain(domain, apiKey);
+
+  switch (found.result) {
+    case "verified":
+      await markReady(true);
+
+      return { domain, senderAddress, state: "ready" };
+    case "missing":
+      await markReady(false);
+
+      return {
+        check: "domain_missing",
+        domain,
+        senderAddress,
+        state: "sendgrid",
+      };
+    case "unverified":
+      await markReady(false);
+
+      return {
+        check: "domain_unverified",
+        domain,
+        senderAddress,
+        state: "sendgrid",
+      };
+    case "restricted":
+      // Nothing is known either way; a test email that arrives sets the mark.
+      return {
+        check: "restricted_key",
+        domain,
+        senderAddress,
+        state: "sendgrid",
+      };
+    case "error":
+      return {
+        check: "error",
+        domain,
+        message: found.message,
+        senderAddress,
+        state: "sendgrid",
+      };
+  }
+}
+
 // Finds out everything short of the domain's DNS records, which cost one
 // more request and are fetched by whoever needs them.
 async function inspectEmail({
@@ -386,6 +484,15 @@ async function inspectEmail({
       domainId: null,
       markReady: noop,
       status: { state: "capture" },
+    };
+  }
+
+  if (!domainsClient && resolveEmailDriver(env) === "sendgrid") {
+    return {
+      client: null,
+      domainId: null,
+      markReady: noop,
+      status: await inspectSendGrid(env, settings, recordReady),
     };
   }
 

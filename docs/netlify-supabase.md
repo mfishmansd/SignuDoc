@@ -1,17 +1,18 @@
 # Running SignuDoc on Netlify with Supabase
 
 This fork runs SignuDoc on Netlify, with its database and files in a
-Supabase project, including one that another app already uses. Nothing
-else changes: email still goes through Resend, and the app, API and
-webhooks work as described in the rest of the docs.
+Supabase project, including one that another app already uses. Email can go
+through SendGrid instead of Resend. The app, API and webhooks work as
+described in the rest of the docs.
 
-| Vercel install    | This setup                                        |
-| ----------------- | ------------------------------------------------- |
-| Vercel hosting    | Netlify site (Next.js runtime, Node 24)           |
-| Neon Postgres     | Supabase Postgres, in its own `signudoc` schema   |
-| Vercel Blob       | Supabase Storage, a private `signudoc` bucket     |
-| Vercel crons      | Netlify scheduled functions (`netlify/functions`) |
-| Daily Blob backup | Not used: Supabase backs up the database itself   |
+| Vercel install    | This setup                                         |
+| ----------------- | -------------------------------------------------- |
+| Vercel hosting    | Netlify site (Next.js runtime, Node 24)            |
+| Neon Postgres     | Supabase Postgres, in its own `signudoc` schema    |
+| Vercel Blob       | Supabase Storage, a private `signudoc` bucket      |
+| Resend email      | SendGrid (`SENDGRID_API_KEY`), or Resend as before |
+| Vercel crons      | Netlify scheduled functions (`netlify/functions`)  |
+| Daily Blob backup | Not used: Supabase backs up the database itself    |
 
 ## 1. Prepare the Supabase project (once)
 
@@ -44,7 +45,8 @@ configuration, Environment variables), for all scopes:
 | `APP_URL`                   | The site's public `https://` address.                                                                                                            |
 | `BETTER_AUTH_SECRET`        | `openssl rand -hex 32`                                                                                                                           |
 | `CRON_SECRET`               | `openssl rand -hex 32`. The scheduled functions send it; the job routes require it.                                                              |
-| `RESEND_API_KEY`            | From Resend, with a verified sending domain.                                                                                                     |
+| `SENDGRID_API_KEY`          | A SendGrid API key. Mail Send access is enough to send; Full Access also lets Settings check the domain. (Or `RESEND_API_KEY` for Resend.)       |
+| `EMAIL_FROM`                | The sender, at a domain authenticated in SendGrid, such as `Privion <sign@priviontech.com>`. Can also be set in Settings instead.                |
 
 `DATABASE_SCHEMA=signudoc` is already set for the build in `netlify.toml`;
 the migrator creates every table there. The app itself finds them through
@@ -95,3 +97,17 @@ git merge upstream/main
 
 If a new upstream query hard-codes `public.`, it will fail on this setup
 with "relation does not exist": remove the prefix.
+
+## Email through SendGrid
+
+Setting `SENDGRID_API_KEY` (and no `RESEND_API_KEY`) sends every email
+through SendGrid's Mail Send API (`src/lib/services/email-sendgrid.ts`);
+`EMAIL_DRIVER=sendgrid` forces it. The sender's domain must be authenticated
+in SendGrid (Settings, Sender Authentication). Settings, Organization, Email
+setup reports what SendGrid says about the domain, or, with a send-only key,
+asks for a test email.
+
+Click and open tracking are turned off on every message, whatever the
+SendGrid account's defaults, so signing links reach signers unchanged
+rather than through SendGrid's redirect. SendGrid has no idempotency key, so
+only a refused-for-rate (429) send is retried.
