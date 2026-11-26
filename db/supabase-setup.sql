@@ -25,6 +25,10 @@ alter role signudoc_app set search_path = signudoc;
 -- can take longer than that, so give this role more room.
 alter role signudoc_app set statement_timeout = '60s';
 
+-- On Supabase, postgres is not a superuser: it must be a member of the role
+-- before it can create a schema owned by it.
+grant signudoc_app to postgres;
+
 create schema if not exists signudoc authorization signudoc_app;
 revoke all on schema signudoc from public;
 

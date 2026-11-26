@@ -27,3 +27,6 @@ playwright-report/
 # Claude Code
 .claude/
 
+
+# Local Netlify folder
+.netlify

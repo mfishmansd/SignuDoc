@@ -52,8 +52,15 @@ configuration, Environment variables), for all scopes:
 the migrator creates every table there. The app itself finds them through
 the role's `search_path`.
 
+Use the pooler host shown under Connect in the Supabase dashboard; newer
+projects are on `aws-1-<region>`, not `aws-0-<region>`.
+
 Deploy. The build runs the migrations before `next build`. Deploy previews
 and branch deploys skip them, since they share the production database.
+
+Deploying from a laptop with `netlify deploy --build` needs a recent
+Netlify CLI (27 or later); older ones bundle an edge bundler whose Deno
+cannot load the Next.js 16 middleware.
 
 ## 3. Finish setup in the app
 
